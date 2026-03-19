@@ -26,6 +26,8 @@ export type EnterRegionResponse = {
   event_text: string;
   story_fragment: string;
   is_new_fragment: boolean;
+  rumor_text: string;
+  is_new_rumor: boolean;
 };
 
 export type ChatResponse = {
@@ -82,5 +84,23 @@ export type PlayerProgress = {
   player_id: string;
   explored_region_ids: string[];
   story_fragments: string[];
+  rumors: string[];
   recent_events: PlayerEventItem[];
+};
+
+export type NpcAutonomyActionItem = {
+  created_at: string;
+  tick: number;
+  action_type: "idle" | "move" | "share_rumor" | "create_event";
+  action_text: string;
+  region_id: string;
+};
+
+export type NpcAutonomyState = {
+  npc_id: string;
+  world_tick: number;
+  day_phase: "清晨" | "白昼" | "黄昏" | "夜晚";
+  autonomy_memory: string;
+  session_logs: string[];
+  recent_actions: NpcAutonomyActionItem[];
 };

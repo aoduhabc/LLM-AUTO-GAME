@@ -3,6 +3,7 @@ import type {
   DialogueHistoryResponse,
   EnterRegionResponse,
   KnownNpc,
+  NpcAutonomyState,
   PlayerProgress,
   NpcProfile,
   Region
@@ -50,6 +51,10 @@ export function chatWithNpc(playerId: string, npcId: string, message: string) {
 
 export function getNpcProfile(npcId: string) {
   return request<NpcProfile>(`/npc/${npcId}`);
+}
+
+export function getNpcAutonomy(npcId: string) {
+  return request<NpcAutonomyState>(`/npc/${npcId}/autonomy`);
 }
 
 export function getDialogueHistory(playerId: string, npcId: string) {

@@ -5,11 +5,12 @@ import {
   fetchRegions,
   getDialogueHistory,
   getKnownNpcs,
+  getNpcAutonomy,
   getNpcProfile,
   getPlayerProgress
 } from "./api";
 import { useGameStore } from "./store";
-import type { KnownNpc, PlayerEventItem, RegionEnterNpc } from "./types";
+import type { KnownNpc, NpcAutonomyState, PlayerEventItem, RegionEnterNpc } from "./types";
 
 const GRID_WIDTH = 16;
 const GRID_HEIGHT = 12;
@@ -112,7 +113,9 @@ export default function App() {
   const [tip, setTip] = useState("欢迎来到乡野絮语，使用方向键移动。");
   const [knownNpcs, setKnownNpcs] = useState<KnownNpc[]>([]);
   const [storyFragments, setStoryFragments] = useState<string[]>([]);
+  const [rumors, setRumors] = useState<string[]>([]);
   const [recentEvents, setRecentEvents] = useState<PlayerEventItem[]>([]);
+  const [autonomyState, setAutonomyState] = useState<NpcAutonomyState | null>(null);
 
   const currentRegion = useMemo(
     () => regions.find((region) => region.region_id === currentRegionId) ?? null,
@@ -162,6 +165,7 @@ export default function App() {
     getPlayerProgress(playerId)
       .then((progress) => {
         setStoryFragments(progress.story_fragments);
+        setRumors(progress.rumors);
         setRecentEvents(progress.recent_events);
       })
       .catch(() => {
@@ -184,14 +188,18 @@ export default function App() {
         upsertNpcs(res.npcs);
         const regionName = regions.find((r) => r.region_id === regionId)?.region_name ?? "未知区域";
         const fragmentTip = res.is_new_fragment ? " 你收集到一条村闻碎片。" : "";
+        const rumorTip = res.is_new_rumor ? ` 你听到新传闻：${res.rumor_text}` : "";
         if (res.npc_generated && res.npcs[0]) {
-          setTip(`你进入了${regionName}，遇见了${res.npcs[0].name}。${res.event_text}${fragmentTip}`);
+          setTip(
+            `你进入了${regionName}，遇见了${res.npcs[0].name}等${res.npcs.length}位村民。${res.event_text}${fragmentTip}${rumorTip}`
+          );
         } else {
-          setTip(`你回到了${regionName}。${res.event_text}${fragmentTip}`);
+          setTip(`你回到了${regionName}。${res.event_text}${fragmentTip}${rumorTip}`);
         }
         getPlayerProgress(playerId)
           .then((progress) => {
             setStoryFragments(progress.story_fragments);
+            setRumors(progress.rumors);
             setRecentEvents(progress.recent_events);
           })
           .catch(() => {
@@ -235,14 +243,17 @@ export default function App() {
 
   async function openDialogue(npc: RegionEnterNpc) {
     setActiveNpc(npc);
+    setAutonomyState(null);
     clearMessages();
     setSuggestions([]);
     try {
-      const [profile, history] = await Promise.all([
+      const [profile, history, autonomy] = await Promise.all([
         getNpcProfile(npc.npc_id),
-        getDialogueHistory(playerId, npc.npc_id)
+        getDialogueHistory(playerId, npc.npc_id),
+        getNpcAutonomy(npc.npc_id)
       ]);
       setActiveNpcProfile(profile);
+      setAutonomyState(autonomy);
       if (history.history.length > 0) {
         history.history.forEach((item, index) => {
           appendMessage({
@@ -291,6 +302,8 @@ export default function App() {
       setSuggestions(res.suggestions);
       const profile = await getNpcProfile(activeNpc.npc_id);
       setActiveNpcProfile(profile);
+      const autonomy = await getNpcAutonomy(activeNpc.npc_id);
+      setAutonomyState(autonomy);
       const archive = await getKnownNpcs(playerId);
       setKnownNpcs(archive);
     } catch {
@@ -425,6 +438,15 @@ export default function App() {
             </span>
           ))}
         </div>
+        <div className="archive">
+          <strong>村中传闻</strong>
+          {rumors.length === 0 && <span className="subtle">暂无</span>}
+          {rumors.map((rumor) => (
+            <span key={rumor} className="subtle">
+              {rumor}
+            </span>
+          ))}
+        </div>
         {!activeNpc && <p>靠近 NPC 后点击人物，或在“附近 NPC”里发起对话。</p>}
         {activeNpc && (
           <>
@@ -443,6 +465,34 @@ export default function App() {
               <span>当前情绪：{activeNpcProfile?.mood || "暂无"}</span>
               <span>最近互动：{formatTimeLabel(activeNpcProfile?.last_interaction_at ?? null)}</span>
               <span>记忆摘要：{activeNpcProfile?.memory_summary || "暂无"}</span>
+              <span>自治记忆：{autonomyState?.autonomy_memory || "暂无"}</span>
+              <span>
+                世界进度：tick {autonomyState?.world_tick ?? "-"} · {autonomyState?.day_phase ?? "未知时段"}
+              </span>
+            </div>
+            <div className="archive">
+              <strong>NPC 行动日志</strong>
+              {autonomyState?.recent_actions.length ? null : <span className="subtle">暂无</span>}
+              {autonomyState?.recent_actions
+                .slice()
+                .reverse()
+                .map((item) => (
+                  <span key={`${item.created_at}_${item.tick}_${item.action_type}`} className="subtle">
+                    {`tick${item.tick} · ${item.action_type} · ${item.action_text}`}
+                  </span>
+                ))}
+            </div>
+            <div className="archive">
+              <strong>NPC 自治会话</strong>
+              {autonomyState?.session_logs.length ? null : <span className="subtle">暂无</span>}
+              {autonomyState?.session_logs
+                .slice()
+                .reverse()
+                .map((item, index) => (
+                  <span key={`${index}_${item}`} className="subtle">
+                    {item}
+                  </span>
+                ))}
             </div>
             <div className="messages">
               {messages.map((message) => (
